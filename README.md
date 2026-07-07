@@ -1,7 +1,3 @@
-Aqui está um exemplo de um arquivo `README.md` para o seu jogo:
-
----
-
 # Jogo de Adivinhação com Flask
 
 Este é um simples jogo de adivinhação desenvolvido utilizando o framework Flask. O jogador deve adivinhar uma senha criada aleatoriamente, e o sistema fornecerá feedback sobre o número de letras corretas e suas respectivas posições.
@@ -10,103 +6,67 @@ Este é um simples jogo de adivinhação desenvolvido utilizando o framework Fla
 
 - Criação de um novo jogo com uma senha fornecida pelo usuário.
 - Adivinhe a senha e receba feedback se as letras estão corretas e/ou em posições corretas.
-- As senhas são armazenadas  utilizando base64.
+- As senhas são armazenadas utilizando base64.
 - As adivinhações incorretas retornam uma mensagem com dicas.
-  
-## Requisitos
 
-- Python 3.8+ - 3.12
-- Flask
-- Um banco de dados local (ou um mecanismo de armazenamento configurado em `current_app.db`)
-- node 18.17.0
+## Executando com Docker Compose
 
-## Instalação
+Essa é a forma de rodar o projeto completo (backend, frontend e banco de dados), não sendo necessário instalar Python, Node ou Postgres na sua máquina, apenas o Docker.
 
-1. Clone o repositório:
+### Pré-requisitos
 
-   ```bash
-   git clone https://github.com/fams/guess_game.git
-   cd guess-game
-   ```
+- Docker instalado (o Docker Desktop já vem com o Compose incluso. Em Linux com Docker Engine "puro", pode ser necessário instalar o pacote `docker-compose-plugin` à parte)
 
-2. Crie um ambiente virtual e ative-o:
+### Como rodar
 
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # Linux/Mac
-   venv\Scripts\activate  # Windows
-   ```
+```bash
+docker compose up -d --build
+```
 
-3. Instale as dependências:
+Acesse: **http://localhost:3000**
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+### O que sobe
 
-4. Configure o banco de dados com as variáveis de ambiente no arquivo start-backend.sh
-    1. Para sqlite
+- **`postgres`**: banco de dados Postgres 16. Os dados ficam guardados num volume (`pgdata`), então sobrevivem mesmo se o container for recriado.
+- **`backend1` e `backend2`**: duas cópias idênticas da API Flask, ambas conectadas ao mesmo banco. Existem duas cópias justamente para permitir balanceamento de carga.
+- **`frontend`**: builda o React e serve com NGINX. É o único container que expõe uma porta pro seu navegador (a 3000).
 
-        ```bash
-            export FLASK_APP="run.py"
-            export FLASK_DB_TYPE="sqlite"            # Use SQLITE
-            export FLASK_DB_PATH="caminho/db.sqlite" # caminho do banco
-        ```
+### Como funciona o balanceamento de carga
 
-    2. Para Postgres
+O NGINX (`frontend/default.conf`) lista `backend1` e `backend2` num bloco `upstream`. Toda chamada de API (`/create`, `/guess/<id>`) passa por esse NGINX, que alterna entre os dois backends a cada request. Se um deles cair, o outro continua respondendo.
 
-        ```bash
-            export FLASK_APP="run.py"
-            export FLASK_DB_TYPE="postgres"       # Use postgres
-            export FLASK_DB_USER="postgres"       # Usuário do banco
-            export FLASK_DB_NAME="postgres"       # Nome do Banco
-            export FLASK_DB_PASSWORD="secretpass" # Senha do banco
-            export FLASK_DB_HOST="localhost"      # Hostname
-            export FLASK_DB_PORT="5432"           # Porta
-        ```
+### Resiliência
 
-    3. Para DynamoDB
+Todos os serviços têm `restart: unless-stopped` — se algum travar, o Docker sobe ele de novo automaticamente. O Postgres também tem um `healthcheck`, e os backends só sobem depois que o banco realmente está pronto para aceitar conexões.
 
-        ```bash
-        export FLASK_APP="run.py"
-        export FLASK_DB_TYPE="dynamodb"       # Use postgres
-        export AWS_DEFAULT_REGION="us-east-1" # AWS region
-        export AWS_ACCESS_KEY_ID="FAKEACCESSKEY123456" 
-        export AWS_SECRET_ACCESS_KEY="FakeSecretAccessKey987654321"
-        export AWS_SESSION_TOKEN="FakeSessionTokenABCDEFGHIJKLMNOPQRSTUVXYZ1234567890"
-        ```
+### Persistência dos dados
 
-5. Execute o backend
+Os dados do Postgres ficam no volume `pgdata`. `docker compose down` mantém esses dados; só `docker compose down -v` apaga o volume e reseta o banco.
 
-   ```bash
-   ./start-backend.sh &
-   ```
+### Como atualizar cada componente
 
-6. Cuidado! verifique se o seu linux está lendo o arquivo .sh com fim de linha do windows CRLF. Para verificar utilize o vim -b start-backend.sh
+- **Postgres**: troque `image: postgres:16` no `docker-compose.yml` pela versão desejada.
+- **Backend**: troque `FROM python:3.12-slim` no `Dockerfile` da raiz.
+- **Frontend**: troque `FROM node:18-alpine` ou `FROM nginx:alpine` no `frontend/Dockerfile`.
 
-## Frontend
-No diretorio de frontend
+Depois de qualquer uma dessas mudanças, rode de novo:
 
-1. Instale o node com o nvm. Se não tiver o nvm instalado, siga o [tutorial](https://github.com/nvm-sh/nvm?tab=readme-ov-file#installing-and-updating)
+```bash
+docker compose up -d --build
+```
 
-    ```bash
-    nvm install 18.17.0
-    nvm use 18.17.0
-    # Habilite o yarn
-    corepack enable
-    ```
+### Parar tudo
 
-2. Instale as dependências do node com o npm:
+```bash
+docker compose down
+```
 
-    ```bash
-    npm install
-    ```
+### Decisões de design
 
-3. Exporte a url onde está executando o backend e execute o backend.
-
-   ```bash
-    export REACT_APP_BACKEND_URL=http://localhost:5000
-    yarn start
-   ```
+- **Duas cópias fixas do backend (`backend1` e `backend2`)**: em vez de deixar o Docker escalar um serviço sozinho, criamos duas cópias com nomes fixos. Isso deixa simples e confiável pro NGINX saber exatamente pra quais dois endereços mandar os pedidos, sem configuração extra.
+- **`REACT_APP_BACKEND_URL` vazio no frontend**: assim, as chamadas da API são feitas pro mesmo endereço que carregou a página (ex: `/create`), em vez de um endereço fixo de backend. Isso evita problemas de CORS e mantém o frontend independente de onde o backend está rodando.
+- **`healthcheck` no Postgres**: garante que os backends só iniciem depois que o banco de dados estiver realmente pronto para receber conexões, evitando erros de inicialização.
+- **Volume nomeado `pgdata`**: garante que os dados do jogo não sejam perdidos se o container do Postgres for recriado.
 
 ## Como Jogar
 
@@ -119,7 +79,6 @@ Digite uma frase secreta
 Envie
 
 Salve o game-id
-
 
 ### 2. Adivinhar a senha
 
@@ -143,8 +102,6 @@ Tente adivinhar
 - **`Guess`**: Classe responsável por gerenciar a lógica de comparação entre a senha e a tentativa do jogador.
 - **`WrongAttempt`**: Exceção personalizada que é levantada quando a tentativa está incorreta.
 
-
-
 ## Melhorias Futuras
 
 - Implementar autenticação de usuário para salvar e carregar jogos.
@@ -154,4 +111,3 @@ Tente adivinhar
 ## Licença
 
 Este projeto está licenciado sob a [MIT License](LICENSE).
-

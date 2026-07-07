@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secretpass
+      POSTGRES_DB: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend1:
+    build: .
+    restart: unless-stopped
+    environment:
+      FLASK_DB_TYPE: postgres
+      FLASK_DB_USER: postgres
+      FLASK_DB_NAME: postgres
+      FLASK_DB_PASSWORD: secretpass
+      FLASK_DB_HOST: postgres
+      FLASK_DB_PORT: "5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend2:
+    build: .
+    restart: unless-stopped
+    environment:
+      FLASK_DB_TYPE: postgres
+      FLASK_DB_USER: postgres
+      FLASK_DB_NAME: postgres
+      FLASK_DB_PASSWORD: secretpass
+      FLASK_DB_HOST: postgres
+      FLASK_DB_PORT: "5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend1
+      - backend2
+
+volumes:
+  pgdata:
