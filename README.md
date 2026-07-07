@@ -9,6 +9,15 @@ Este é um simples jogo de adivinhação desenvolvido utilizando o framework Fla
 - As senhas são armazenadas utilizando base64.
 - As adivinhações incorretas retornam uma mensagem com dicas.
 
+## Configuração Docker/NGINX
+
+Arquivos essenciais da configuração:
+
+- **`docker-compose.yml`** (raiz): orquestra todos os serviços (Postgres, backends, frontend).
+- **`Dockerfile`** (raiz): build do container do backend Flask.
+- **`frontend/Dockerfile`**: build do frontend React e da imagem que serve com NGINX.
+- **`frontend/default.conf`**: configuração do NGINX (proxy reverso e balanceamento de carga entre os backends).
+
 ## Executando com Docker Compose
 
 Essa é a forma de rodar o projeto completo (backend, frontend e banco de dados), não sendo necessário instalar Python, Node ou Postgres na sua máquina, apenas o Docker.
@@ -101,12 +110,6 @@ Tente adivinhar
 
 - **`Guess`**: Classe responsável por gerenciar a lógica de comparação entre a senha e a tentativa do jogador.
 - **`WrongAttempt`**: Exceção personalizada que é levantada quando a tentativa está incorreta.
-
-## Melhorias Futuras
-
-- Implementar autenticação de usuário para salvar e carregar jogos.
-- Adicionar limite de tentativas.
-- Melhorar a interface de feedback para as tentativas de adivinhação.
 
 ## Licença
 
