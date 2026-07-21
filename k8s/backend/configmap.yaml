@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+data:
+  FLASK_DB_TYPE: "postgres"
+  FLASK_DB_USER: "postgres"
+  FLASK_DB_NAME: "postgres"
+  FLASK_DB_HOST: "postgres"
+  FLASK_DB_PORT: "5432"
